@@ -28,7 +28,9 @@ jobs:
       - name: Compare latest version with current version
         run: |
           need_update=0
+
           latest=$(curl --retry 5 --retry-delay 5 "http://fota-cloud-dn.ospserver.net/firmware/${{ matrix.csc }}/${{ matrix.model }}/version.xml" | grep latest | sed 's/^[^>]*>//' | sed 's/<.*//')
+
           latest_short=$(echo "$latest" | cut -d'/' -f1)
           latest_csc=$(echo "$latest" | cut -d'/' -f2)
           latest_modem=$(echo "$latest" | cut -d'/' -f3)
@@ -51,11 +53,11 @@ jobs:
         with:
           node-version: 'latest'
 
-      - name: Set up Python 3
+      - name: Set up Python 3.11
         if: env.need_update == '1'
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.11'
 
       - name: Install dependencies
         if: env.need_update == '1'
@@ -69,7 +71,7 @@ jobs:
         if: env.need_update == '1'
         run: |
           imei="350090711234564"
-          samfirm -m ${{ matrix.model }} -r ${{ matrix.csc }} -i "$imei"
+          samfirm -m "${{ matrix.model }}" -r "${{ matrix.csc }}" -i "$imei"
 
       - name: Get path of files
         if: env.need_update == '1'
@@ -83,9 +85,9 @@ jobs:
       - name: Check downloaded firmware version
         if: env.need_update == '1'
         run: |
-          version_short=$(echo "${{ env.ap_tar }}" | cut -d'_' -f3)
-          version_csc=$(echo "${{ env.csc_tar }}" | cut -d'_' -f4)
-          version_modem=$(echo "${{ env.cp_tar }}" | cut -d'_' -f3)
+          version_short=$(basename "${{ env.ap_tar }}" | cut -d'_' -f3)
+          version_csc=$(basename "${{ env.csc_tar }}" | cut -d'_' -f4)
+          version_modem=$(basename "${{ env.cp_tar }}" | cut -d'_' -f3)
 
           [[ "$version_short" == "${{ env.latest_shortversion }}" ]]
           [[ "$version_csc" == "${{ env.latest_cscversion }}" ]]
@@ -111,6 +113,7 @@ jobs:
           for file in $FILES; do
             tar xvf "${{ env.ap_tar }}" "$file"
           done
+
           tar cvf "${{ env.latest_shortversion }}_kernel.tar" *.lz4
           rm *.lz4
 
@@ -126,7 +129,9 @@ jobs:
           tar xvf "${{ env.ap_tar }}" vbmeta.img.lz4
           lz4 -d vbmeta.img.lz4 vbmeta.img
           rm vbmeta.img.lz4
+
           printf "$(printf '\\x%02X' 3)" | dd of="vbmeta.img" bs=1 seek=123 count=1 conv=notrunc &> /dev/null
+
           tar cvf "${{ env.latest_shortversion }}_patched_vbmeta.tar" vbmeta.img
           rm vbmeta.img
 
@@ -142,21 +147,29 @@ jobs:
           mv super_raw.img super.img
 
           python3 tools/bin/lpunpack.py -p vendor,vendor_dlkm super.img .
+
           rm super.img
 
-          [[ -e vendor.img ]] && zip "${{ env.latest_shortversion }}_vendor.zip" vendor.img
-          [[ -e vendor_dlkm.img ]] && zip "${{ env.latest_shortversion }}_vendor_dlkm.zip" vendor_dlkm.img
+          if [[ -e vendor.img ]]; then
+            zip "${{ env.latest_shortversion }}_vendor.zip" vendor.img
+            rm vendor.img
+          fi
 
-          [[ -e vendor.img ]] && rm vendor.img
-          [[ -e vendor_dlkm.img ]] && rm vendor_dlkm.img
+          if [[ -e vendor_dlkm.img ]]; then
+            zip "${{ env.latest_shortversion }}_vendor_dlkm.zip" vendor_dlkm.img
+            rm vendor_dlkm.img
+          fi
 
       - name: Update current version
         if: env.need_update == '1'
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git pull origin ${{ github.ref }} --ff-only
+
+          git pull origin "${{ github.ref }}" --ff-only
+
           echo "${{ env.latest_version }}" > "current.${{ matrix.model }}_${{ matrix.omc }}"
+
           git add "current.${{ matrix.model }}_${{ matrix.omc }}"
           git commit -m "${{ matrix.model }} EGY: ${{ env.latest_version }}"
           git tag "${{ env.latest_shortversion }}_${{ matrix.omc }}"
