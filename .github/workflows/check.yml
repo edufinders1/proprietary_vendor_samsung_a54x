@@ -86,8 +86,15 @@ jobs:
         if: env.need_update == '1'
         run: |
           version_short=$(basename "${{ env.ap_tar }}" | cut -d'_' -f3)
-          version_csc=$(basename "${{ env.csc_tar }}" | cut -d'_' -f4)
-          version_modem=$(basename "${{ env.cp_tar }}" | cut -d'_' -f3)
+          version_csc=$(basename "${{ env.csc_tar }}" | cut -d'_' -f3)
+          version_modem=$(basename "${{ env.cp_tar }}" | cut -d'_' -f2)
+
+          echo "Expected PDA: ${{ env.latest_shortversion }}"
+          echo "Detected PDA: $version_short"
+          echo "Expected CSC: ${{ env.latest_cscversion }}"
+          echo "Detected CSC: $version_csc"
+          echo "Expected Modem: ${{ env.latest_modemversion }}"
+          echo "Detected Modem: $version_modem"
 
           [[ "$version_short" == "${{ env.latest_shortversion }}" ]]
           [[ "$version_csc" == "${{ env.latest_cscversion }}" ]]
